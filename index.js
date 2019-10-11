@@ -11,18 +11,20 @@ function select(query, data) {
     const conditions = query.substring(whereIdx + 5, orderIdx === -1 ? query.length : orderIdx).split(' AND ').map(field => field.trim());
     // const order = orderIdx === -1 ? 'ASC' : query.substring(orderIdx + 8, query.length).trim();
 
-    console.log(fields);
-    console.log(table);
-    console.log(conditions);
+    // console.log(fields);
+    // console.log(table);
+    // console.log(conditions);
     // console.log(order)
 
     let filters = [];
     conditions.forEach(c => {
         filters.push(getCondition(c));
     })
-    console.log(filters)
+    // console.log(filters)
 
-    return data[table].filter(row => {
+
+    // Do the filtering and return result
+    let filtered = data[table].filter(row => {
         let pass;
 
         filters.forEach(f => {
@@ -46,6 +48,16 @@ function select(query, data) {
             return row;
         }
     });
+
+    return filtered.map(row => {
+        let mappedRow = {};
+        Object.keys(row).forEach(key => {
+            if (fields.includes(key)) {
+                mappedRow[key] = row[key];
+            }
+        });
+        return mappedRow;
+    })
 }
 
 
@@ -75,6 +87,6 @@ let data = [
 ]
 
 
-let q = 'SELECT a, b, c FROM data WHERE a = b'
+let q = 'SELECT a, c FROM data WHERE a = b'
 let result = select(q, { data: data });
 console.log(result);
