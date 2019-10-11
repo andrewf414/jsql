@@ -6,14 +6,18 @@ function select(query, data) {
     let whereIdx = query.toUpperCase().indexOf('WHERE');
     let orderIdx = query.toUpperCase().indexOf('ORDER BY');
 
-    const fields = query.substring(selectIdx + 6, fromIdx).split(',').map(field => field.trim());
+    if (selectIdx < 0 || fromIdx < 0) throw new Error('invalid SQL syntax. No SELECT or FROM found');
+
     const table = query.substring(fromIdx + 4, query.indexOf(' ', fromIdx + 5)).trim();
+    const fields = query.substring(selectIdx + 6, fromIdx).split(',').map(field => field.trim());
+    if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
+    
     const conditions = query.substring(whereIdx + 5, orderIdx === -1 ? query.length : orderIdx).split(' AND ').map(field => field.trim());
     // const order = orderIdx === -1 ? 'ASC' : query.substring(orderIdx + 8, query.length).trim();
 
-    // console.log(fields);
+    console.log(fields);
     // console.log(table);
-    // console.log(conditions);
+    console.log(conditions);
     // console.log(order)
 
     let filters = [];
@@ -36,13 +40,22 @@ function select(query, data) {
  * @param {string} conditionString e.g. a = b
  */
 function getCondition(conditionString) {
-    const conditionOperators = /(?:<>)|(?:<=)|(?:>=)|[=><]/g
+    const conditionOperators = /(?:<>)|(?:<=)|(?:>=)|[=><]|like|in|between/gi
 
+    const comparison = conditionString.match(conditionOperators)[0].trim();
     const tmp = conditionString.split(conditionOperators);
+
+    if (comparison.toLowerCase() === 'between') {
+        // need to get two values
+    }
+    if (comparison.toLowerCase() === 'in') {
+        // get the list
+    }
+
+    
     const field = tmp[0].trim();
     let value = tmp[1].trim().replace(/["']/g, '');
     if (!isNaN(+value)) value = +value;
-    const comparison = conditionString.match(conditionOperators)[0].trim();
 
     return { field: field, value: value, comparison: comparison };
 }
@@ -57,7 +70,7 @@ function filterAndMapData(data, fields, filters) {
     return data.reduce((acc, row) => {
         let pass = 1;
         filters.forEach(f => {
-            switch (f.comparison) {
+            switch (f.comparison.toLowerCase()) {
                 case '=':
                     pass *= +(row[f.field] === f.value);
                     break;
@@ -74,6 +87,15 @@ function filterAndMapData(data, fields, filters) {
                     pass *= +(row[f.field] <= f.value);
                     break;
                 case '>=':
+                    pass *= +(row[f.field] >= f.value);
+                    break;
+                case 'like':
+                    pass *= +(row[f.field] >= f.value);
+                    break;
+                case 'in':
+                    pass *= +(f.value.includes(row[f.field]));
+                    break;
+                case 'between':
                     pass *= +(row[f.field] >= f.value);
                     break;
             }
@@ -101,6 +123,6 @@ let data = [
 ]
 
 
-let q = 'SELECT a, c FROM data WHERE a > 3 AND b = 2'
+let q = 'SELECT * FROM data WHERE a IN (2,3,4) AND b BETWEEN 1 AND 3 AND c LIKE "fart"'
 let result = select(q, { data: data });
 console.log(result);
