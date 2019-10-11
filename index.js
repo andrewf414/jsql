@@ -24,40 +24,35 @@ function select(query, data) {
 
 
     // Do the filtering and return result
-    let filtered = data[table].filter(row => {
-        let pass;
-
+    return data[table].reduce((acc, row) => {
+        let pass = 1;
         filters.forEach(f => {
             switch (f.comparison) {
                 case '=':
-                    pass = row[f.field1] === row[f.field2];
+                    pass *= +(row[f.field1] === row[f.field2]);
                     break;
                 case '<>':
-                    pass = row[f.field1] !== row[f.field2];
+                    pass *= +(row[f.field1] !== row[f.field2]);
                     break;
                 case '>':
-                    pass = row[f.field1] > row[f.field2];
+                    pass *= +(row[f.field1] > row[f.field2]);
                     break;
                 case '<':
-                    pass = row[f.field1] < row[f.field2];
+                    pass *= +(row[f.field1] < row[f.field2]);
                     break;
             }
         });
-
-        if (pass) {
-            return row;
+        if (!!pass) {
+            let mappedRow = {};
+            Object.keys(row).forEach(key => {
+                if (fields.includes(key)) {
+                    mappedRow[key] = row[key];
+                }
+            });
+            acc.push(mappedRow);
         }
-    });
-
-    return filtered.map(row => {
-        let mappedRow = {};
-        Object.keys(row).forEach(key => {
-            if (fields.includes(key)) {
-                mappedRow[key] = row[key];
-            }
-        });
-        return mappedRow;
-    })
+        return acc;
+    }, []);
 }
 
 
