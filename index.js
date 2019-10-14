@@ -3,19 +3,19 @@
 function select(query, data) {
     // Get data source table (FROM)
     let fromIdx = query.toUpperCase().indexOf('FROM', 6);
-    if (fromIdx < 0 ) throw new Error('invalid SQL syntax. No FROM found');
+    if (fromIdx < 0) throw new Error('invalid SQL syntax. No FROM found');
     const table = query.substring(fromIdx + 4, query.indexOf(' ', fromIdx + 5)).trim();
-    
+
     // Get fields we are selecting
     let selectIdx = query.toUpperCase().indexOf('SELECT');
-    if (selectIdx < 0 ) throw new Error('invalid SQL syntax. No SELECT found');
+    if (selectIdx < 0) throw new Error('invalid SQL syntax. No SELECT found');
     let fieldsRgx = /(\s([\w*]+[,\s]+)+)(?=FROM)/gi;
-    const fields = query.match(fieldsRgx)[0].split(',').map(f=>f.trim());
-    if (fields.includes('*')) fields.push(...Object.keys(data[table][0])); 
+    const fields = query.match(fieldsRgx)[0].split(',').map(f => f.trim());
+    if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
 
     // Get any conditions
     let re = /(\s\w+\s)(?:<>)(\s[\w\d]+)|(\s\w+\s)(?:<=)(\s[\w\d]+)|(?:>=)(\s[\w\d]+)|(\s\w+\s)[=><](\s[\w\d]+)|(\s\w+\s)like(\s[\w"%]+)|(\s\w+\s)in(\s\(.+\))|(\s\w+\s)(between)(\s[\w\d]+){3}/gi;
-    const conditions = query.match(re).map(c=>c.trim());
+    const conditions = query.match(re).map(c => c.trim());
 
     // Get order
     let orderRgx = query.match(/ORDER BY\s\w+\s?(ASC|DESC)?/i);
@@ -23,7 +23,7 @@ function select(query, data) {
     if (orderRgx === null) {
         // default
         let i = 0;
-        while (fields[i] === '*') {   
+        while (fields[i] === '*') {
             i++;
         }
         order.field = fields[i];
@@ -32,6 +32,7 @@ function select(query, data) {
         order.field = orderRgx[0].substring(orderRgx[0].lastIndexOf(' ')).trim();
         if (orderRgx[1] === undefined) order.direction = 'ASC'; else order.direction = orderRgx[1];
     }
+    console.log(order);
 
     let filters = [];
     conditions.forEach(c => {
@@ -39,7 +40,7 @@ function select(query, data) {
     });
 
     // Do the filtering and return result
-    return filterAndMapData(data[table], fields, filters);
+    return sort(filterAndMapData(data[table], fields, filters), order.field, order.direction === 'ASC');
 }
 
 
@@ -125,16 +126,47 @@ function filterAndMapData(data, fields, filters) {
 }
 
 
+/**
+ * Sorts an array of values or objects
+ * @param {[<any>]} arr Array to be sorted
+ * @param {*} key Key (if sorting an object) to sort by
+ * @param {*} asc true is default, false to sort descending
+ */
+function sort(arr, key, asc = true) {
+    if (asc) {
+        return arr.sort((a, b) => {
+            if ((a[key] || a) > (b[key] || b)) {
+                return 1;
+            } else {
+                return -1;
+            }
+        });
+    } else {
+        return arr.sort((a, b) => {
+            if ((a[key] || a) > (b[key] || b)) {
+                return -1;
+            } else {
+                return 1;
+            }
+        });
+    }
+}
+
 
 //##############################################################################3
 let data = [
     { a: 5, b: 1, c: 'fart' },
     { a: 4, b: 2, c: 'poo' },
     { a: 3, b: 3, c: 'bum' },
+    { a: 2, b: 3, c: 'bum' },
+    { a: 1, b: 3, c: 'bum' },
+    { a: 7, b: 3, c: 'bum' },
+    { a: 6, b: 3, c: 'bum' },
+    { a: 8, b: 3, c: 'bum' },
 ]
 
 
-let q = 'SELECT * FROM data WHERE a IN (2,3,4) AND b BETWEEN 1 AND 3 AND c LIKE "%oo"'
+let q = 'SELECT * FROM data WHERE a IN (2,3,4,5,6) AND b BETWEEN 1 AND 3 AND c LIKE "%u%"'
 let result = select(q, { data: data });
 console.log(q);
 console.log(result);
