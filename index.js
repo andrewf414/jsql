@@ -33,17 +33,10 @@ function select(query, data) {
         if (orderRgx[1] === undefined) order.direction = 'ASC'; else order.direction = orderRgx[1];
     }
 
-    // console.log(fields);
-    // console.log(table);
-    // console.log(conditions);
-    // console.log(order);
-
     let filters = [];
     conditions.forEach(c => {
         filters.push(getCondition(c));
     });
-    console.log(filters);
-
 
     // Do the filtering and return result
     return filterAndMapData(data[table], fields, filters);
@@ -53,8 +46,9 @@ function select(query, data) {
 
 /**
  * Takes in a condition string and returns the elements
- * e.g. a = b returns {field1: a, field2: b, condition: '='}
- * Valid operands are =, <>, >, <
+ * e.g. a = b returns {field: a, value1: b, condition: '='}
+ * value2 used for between operator
+ * Valid operands are =, <>, >, <, like, in, between
  * @param {string} conditionString e.g. a = b
  */
 function getCondition(conditionString) {
@@ -66,7 +60,6 @@ function getCondition(conditionString) {
     }
     if (elements[1].toLowerCase() === 'in') {
         // get the list
-        console.log(conditionString.match(/\([\d\w,\s]+\)/)[0])
         return { field: elements[0], comparison: elements[1], value1: conditionString.match(/\([\d\w,\s]+\)/)[0] };
     }
     if (elements[1].toLowerCase() === 'like') {
@@ -106,7 +99,8 @@ function filterAndMapData(data, fields, filters) {
                     pass *= +(row[f.field] >= f.value1);
                     break;
                 case 'like':
-                    let re = new RegExp(`${f.value1.charAt(0) === '%' ? '.*' : '^'}${f.value1}${f.value1.charAt(f.value1.length - 1) === '%' ? '.*' : '$'}`)
+                    let term = f.value1.replace(/%/g, '.*');
+                    let re = new RegExp(`${f.value1.charAt(0) === '%' ? '' : '^'}${term}${f.value1.charAt(f.value1.length - 1) === '%' ? '' : '$'}`)
                     pass *= +(row[f.field].match(re) !== null);
                     break;
                 case 'in':
@@ -140,6 +134,7 @@ let data = [
 ]
 
 
-let q = 'SELECT * FROM data WHERE a IN (2,3,4) AND b BETWEEN 1 AND 3 AND c LIKE "poo"'
+let q = 'SELECT * FROM data WHERE a IN (2,3,4) AND b BETWEEN 1 AND 3 AND c LIKE "%oo"'
 let result = select(q, { data: data });
+console.log(q);
 console.log(result);
