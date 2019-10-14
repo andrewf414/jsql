@@ -1,11 +1,25 @@
 {
-  "name": "jsql",
+  "name": "@fitzy/jsql",
   "version": "1.0.0",
-  "description": "",
+  "description": "A utility to allow using SQL statements on js arrays of objects",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "wp": "npx webpack"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "Andrew Fitzgerald <andrewhfitz@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewf414/jsql.git"
+  },
+  "devDependencies": {
+    "webpack": "^4.41.1",
+    "webpack-cli": "^3.3.9"
+  },
+  "bugs": {
+    "url": "https://github.com/andrewf414/jsql/issues"
+  },
+  "homepage": "https://github.com/andrewf414/jsql#readme",
+  "dependencies": {}
 }

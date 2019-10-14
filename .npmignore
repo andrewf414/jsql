@@ -1,0 +1,7 @@
+.gitignore
+.vscode/
+node_modules/
+manualtest.js
+dist/
+tests/
+webpack.config.js
