@@ -13,7 +13,7 @@ class Jsql {
         if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
 
         // Get any conditions
-        let re = /(\s\w+\s)(?:<>)(\s[\w\d"']+)|(\s\w+\s)(?:<=)(\s[\w\d"']+)|(?:>=)(\s[\w\d"']+)|(\s\w+\s)[=><](\s[\w\d"']+)|(\s\w+\s)like(\s[\w"'%]+)|(\s\w+\s)in(\s\(.+\))|(\s\w+\s)(between)(\s[\w\d]+){3}/gi;
+        let re = /(\s*[\w\.]+\s*)((<=)|(>=)|(<>)|[<>=])(\s*[\w\d"']+)|(\s*[\w\.]+\s*)like(\s[\w"'%]+)|(\s*[\w\.]+\s*)between(\s[\w\d]+){3}|(\s*[\w\.]+\s*)in(\s\(.+\))/gi
         const conditionsMatch = query.match(re);
         let conditions = conditionsMatch === null ? null : conditionsMatch.map(c => c.trim().replace(/'|"/g, ''));
 
@@ -58,17 +58,34 @@ class Jsql {
 
         if (elements[1].toLowerCase() === 'between') {
             // need to get two values
-            return { field: elements[0], comparison: elements[1], value1: !isNaN(+elements[2]) ? elements[2] : +elements[2], value2: !isNaN(+elements[4]) ? elements[4] : +elements[4] };
+            return { 
+                field: elements[0], 
+                comparison: elements[1], 
+                value1: !isNaN(+elements[2]) ? elements[2] : +elements[2], 
+                value2: !isNaN(+elements[4]) ? elements[4] : +elements[4] 
+            };
         }
         if (elements[1].toLowerCase() === 'in') {
             // get the list
-            return { field: elements[0], comparison: elements[1], value1: conditionString.match(/\([\d\w,\s]+\)/)[0] };
+            return { 
+                field: elements[0], 
+                comparison: elements[1], 
+                value1: conditionString.match(/\([\d\w,\s]+\)/)[0].toLowerCase()
+            };
         }
         if (elements[1].toLowerCase() === 'like') {
             // get the expression
-            return { field: elements[0], comparison: elements[1], value1: elements[2].replace(/["']/g, '') };
+            return { 
+                field: elements[0], 
+                comparison: elements[1], 
+                value1: elements[2].replace(/["']/g, '').toLowerCase()
+            };
         }
-        return { field: elements[0], comparison: elements[1], value1: isNaN(+elements[2]) ? elements[2] : +elements[2] };
+        return { 
+            field: elements[0], 
+            comparison: elements[1], 
+            value1: isNaN(+elements[2]) ? elements[2].toLowerCase() : +elements[2] 
+        };
     }
 
     /**
@@ -81,35 +98,45 @@ class Jsql {
         return data.reduce((acc, row) => {
             let pass = 1;
             filters.forEach(f => {
+                // Handles any nested objects
+                let keys = f.field.split('.');
+                let datum = row[keys[0]];
+                if (keys.length > 0) {
+                    for (let i = 1; i < keys.length; i++) {
+                        datum = datum[keys[i]];
+                    }
+                }
+                datum = isNaN(+datum) ? datum.toLowerCase() : +datum;
+
                 switch (f.comparison.toLowerCase()) {
                     case '=':
-                        pass *= +(row[f.field].toLowerCase() === f.value1.toLowerCase());
+                        pass *= +(datum === f.value1);
                         break;
                     case '<>':
-                        pass *= +(row[f.field].toLowerCase() !== f.value1.toLowerCase());
+                        pass *= +(datum !== f.value1);
                         break;
                     case '>':
-                        pass *= +(row[f.field] > f.value1);
+                        pass *= +(datum > f.value1);
                         break;
                     case '<':
-                        pass *= +(row[f.field] < f.value1);
+                        pass *= +(datum < f.value1);
                         break;
                     case '<=':
-                        pass *= +(row[f.field] <= f.value1);
+                        pass *= +(datum <= f.value1);
                         break;
                     case '>=':
-                        pass *= +(row[f.field] >= f.value1);
+                        pass *= +(datum >= f.value1);
                         break;
                     case 'like':
                         let term = f.value1.replace(/%/g, '.*');
                         let re = new RegExp(`${f.value1.charAt(0) === '%' ? '' : '^'}${term}${f.value1.charAt(f.value1.length - 1) === '%' ? '' : '$'}`, 'i')
-                        pass *= +(row[f.field].match(re) !== null);
+                        pass *= +(datum.match(re) !== null);
                         break;
                     case 'in':
-                        pass *= +(f.value1.toLowerCase().replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(row[f.field].toString().toLowerCase()));
+                        pass *= +(f.value1.replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(datum));
                         break;
                     case 'between':
-                        pass *= +(row[f.field] >= f.value1 && row[f.field] <= f.value2);
+                        pass *= +(datum >= f.value1 && row[f.field] <= f.value2);
                         break;
                 }
             });

@@ -28,3 +28,4 @@ b) allow me to expand this to have joins later
 * GROUP BY
 * HAVING
 * Aggregate functions (avg, count, etc)
+* Dates
