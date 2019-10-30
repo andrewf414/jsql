@@ -3,10 +3,7 @@
 class Jsql {
 
     static select(query, data) {
-        // Get data source table (FROM)
-        let fromIdx = query.toUpperCase().indexOf('FROM', 6);
-        if (fromIdx < 0) throw new Error('invalid SQL syntax. No FROM found');
-        const table = query.substring(fromIdx + 4, query.indexOf(' ', fromIdx + 5)).trim();
+        const table = query.match(/\sfrom\s+(\w)+($|\s)/gi)[0].trim().split(/\s/)[1];
 
         // Get fields we are selecting
         let selectIdx = query.toUpperCase().indexOf('SELECT');
@@ -16,8 +13,9 @@ class Jsql {
         if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
 
         // Get any conditions
-        let re = /(\s\w+\s)(?:<>)(\s[\w\d]+)|(\s\w+\s)(?:<=)(\s[\w\d]+)|(?:>=)(\s[\w\d]+)|(\s\w+\s)[=><](\s[\w\d]+)|(\s\w+\s)like(\s[\w"%]+)|(\s\w+\s)in(\s\(.+\))|(\s\w+\s)(between)(\s[\w\d]+){3}/gi;
-        const conditions = query.match(re).map(c => c.trim());
+        let re = /(\s\w+\s)(?:<>)(\s[\w\d"']+)|(\s\w+\s)(?:<=)(\s[\w\d"']+)|(?:>=)(\s[\w\d"']+)|(\s\w+\s)[=><](\s[\w\d"']+)|(\s\w+\s)like(\s[\w"'%]+)|(\s\w+\s)in(\s\(.+\))|(\s\w+\s)(between)(\s[\w\d]+){3}/gi;
+        const conditionsMatch = query.match(re);
+        let conditions = conditionsMatch === null ? null : conditionsMatch.map(c => c.trim().replace(/'|"/g, ''));
 
         // Get order
         let orderRgx = query.match(/ORDER BY\s\w+\s?(ASC|DESC)?/i);
@@ -36,9 +34,11 @@ class Jsql {
         }
 
         let filters = [];
-        conditions.forEach(c => {
-            filters.push(this.getCondition(c));
-        });
+        if (conditions !== null) {
+            conditions.forEach(c => {
+                filters.push(this.getCondition(c));
+            });
+        }
 
         // Do the filtering and return result
         return this.sort(this.filterAndMapData(data[table], fields, filters), order.field, order.direction === 'ASC');
@@ -68,7 +68,7 @@ class Jsql {
             // get the expression
             return { field: elements[0], comparison: elements[1], value1: elements[2].replace(/["']/g, '') };
         }
-        return { field: elements[0], comparison: elements[1], value1: !isNaN(+elements[2]) ? elements[2] : +elements[2] };
+        return { field: elements[0], comparison: elements[1], value1: isNaN(+elements[2]) ? elements[2] : +elements[2] };
     }
 
     /**
@@ -83,10 +83,10 @@ class Jsql {
             filters.forEach(f => {
                 switch (f.comparison.toLowerCase()) {
                     case '=':
-                        pass *= +(row[f.field] === f.value1);
+                        pass *= +(row[f.field].toLowerCase() === f.value1.toLowerCase());
                         break;
                     case '<>':
-                        pass *= +(row[f.field] !== f.value1);
+                        pass *= +(row[f.field].toLowerCase() !== f.value1.toLowerCase());
                         break;
                     case '>':
                         pass *= +(row[f.field] > f.value1);
@@ -102,11 +102,11 @@ class Jsql {
                         break;
                     case 'like':
                         let term = f.value1.replace(/%/g, '.*');
-                        let re = new RegExp(`${f.value1.charAt(0) === '%' ? '' : '^'}${term}${f.value1.charAt(f.value1.length - 1) === '%' ? '' : '$'}`)
+                        let re = new RegExp(`${f.value1.charAt(0) === '%' ? '' : '^'}${term}${f.value1.charAt(f.value1.length - 1) === '%' ? '' : '$'}`, 'i')
                         pass *= +(row[f.field].match(re) !== null);
                         break;
                     case 'in':
-                        pass *= +(f.value1.replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(row[f.field].toString()));
+                        pass *= +(f.value1.toLowerCase().replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(row[f.field].toString().toLowerCase()));
                         break;
                     case 'between':
                         pass *= +(row[f.field] >= f.value1 && row[f.field] <= f.value2);
