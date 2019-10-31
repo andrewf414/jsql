@@ -3,23 +3,80 @@
 class Jsql {
 
     static select(query, data) {
-        const table = query.match(/\sfrom\s+(\w)+($|\s)/gi)[0].trim().split(/\s/)[1];
+        const table = this.getTable(query);
+        const fields = this.getFields(query, data, table);
+        const aliases = this.getAliases(query);
+        const conditions = this.getConditions(query);
+        const order = this.getOrder(query, fields);
+        const filters = this.getFilters(conditions);
+        
+        // Do the filtering and return result
+        return this.sort(this.filterAndMapData(data[table], fields, filters, aliases), order.field, order.direction === 'ASC');
+    }
 
-        // Get fields we are selecting
-        let selectIdx = query.toUpperCase().indexOf('SELECT');
-        if (selectIdx < 0) throw new Error('invalid SQL syntax. No SELECT found');
-        let fieldsRgx = /(\s([\w\.*]+[,\s]+)+)(?=FROM)/gi;
-        const fields = query.match(fieldsRgx)[0].split(',').map(f => f.trim());
-        if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
 
-        // Get any conditions
+
+
+
+    /**
+     * Returns null or an array of 'field as alias' strings
+     * @param {string} query SQL style query
+     */
+    static getAliases(query) {
+        let re = /[\w\.]+\s+as\s+\w+/gi;
+        let res = query.match(re);
+        return res === null ? null : res.map(c => c.trim().replace(/'|"/g, ''));
+    }
+
+    /**
+     * Returns null or an array of condition strings
+     * @param {string} query SQL style query
+     */
+    static getConditions(query) {
         let re = /(\s*[\w\.]+\s*)((<=)|(>=)|(<>)|[<>=])(\s*[\w\d"']+)|(\s*[\w\.]+\s*)like(\s[\w"'%]+)|(\s*[\w\.]+\s*)between(\s[\w\d]+){3}|(\s*[\w\.]+\s*)in(\s\(.+\))/gi
         const conditionsMatch = query.match(re);
-        let conditions = conditionsMatch === null ? null : conditionsMatch.map(c => c.trim().replace(/'|"/g, ''));
+        return conditionsMatch === null ? null : conditionsMatch.map(c => c.trim().replace(/'|"/g, ''));
+    }
 
-        // Get order
-        let orderRgx = query.match(/ORDER BY\s\w+\s?(ASC|DESC)?/i);
-        let order = {};
+    /**
+     * Returns null or an array of fields to select
+     * @param {string} query SQL style query
+     * @param {object of arrays of objects} data the data
+     * @param {string} table name of the key in data for array of objects
+     */
+    static getFields(query, data, table) {
+        let selectIdx = query.toUpperCase().indexOf('SELECT');
+        if (selectIdx < 0) throw new Error('invalid SQL syntax. No SELECT found');
+        
+        let fieldsRgx = /(\s([\w\.*]+[,\s]+)+)(?=FROM)/gi;
+        const fieldsMatch = query.match(fieldsRgx);
+        if (fieldsMatch === null) return null;
+
+        const fields = fieldsMatch[0].split(',').map(f => f.trim());
+        if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
+
+        return fields;
+    }
+
+    /**
+     * Returns null or name of the table (i.e. key in the data)
+     * @param {string} query 
+     */
+    static getTable(query) {
+        let re = /\sfrom\s+(\w)+($|\s)/gi
+        const tableMatch = query.match(re);
+        return tableMatch === null ? null : tableMatch[0].trim().split(/\s/)[1];
+    }
+    
+    /**
+     * Returns order specified, or default of first field listed ASC
+     * Format of return is {field: 'name', direction: 'ASC|DESC'}
+     * @param {*} query 
+     * @param {*} fields 
+     */
+    static getOrder(query, fields) {
+        const orderRgx = query.match(/ORDER BY\s\w+\s?(ASC|DESC)?/i);
+        const order = {};
         if (orderRgx === null) {
             // default
             let i = 0;
@@ -33,19 +90,27 @@ class Jsql {
             if (orderRgx[1] === undefined) order.direction = 'ASC'; else order.direction = orderRgx[1];
         }
 
-        let filters = [];
+        return order;
+    }
+
+    /**
+     * Returns array of conditions to be applied
+     * Format is {field: a, value1: b, condition: '='}
+     * @param {*} conditions 
+     */
+    static getFilters(conditions) {
+        const filters = [];
         if (conditions !== null) {
             conditions.forEach(c => {
-                filters.push(this.getCondition(c));
+                filters.push(this.mapCondition(c));
             });
         }
-
-        // Do the filtering and return result
-        return this.sort(this.filterAndMapData(data[table], fields, filters), order.field, order.direction === 'ASC');
+        return filters;
     }
 
 
-
+    
+    
     /**
      * Takes in a condition string and returns the elements
      * e.g. a = b returns {field: a, value1: b, condition: '='}
@@ -53,7 +118,7 @@ class Jsql {
      * Valid operands are =, <>, >, <, like, in, between
      * @param {string} conditionString e.g. a = b
      */
-    static getCondition(conditionString) {
+    static mapCondition(conditionString) {
         let elements = conditionString.split(/\s+/);
 
         if (elements[1].toLowerCase() === 'between') {
@@ -94,7 +159,7 @@ class Jsql {
      * @param {*} fields 
      * @param {*} filters 
      */
-    static filterAndMapData(data, fields, filters) {
+    static filterAndMapData(data, fields, filters, aliases) {
         return data.reduce((acc, row) => {
             let pass = 1;
             filters.forEach(f => {
@@ -144,6 +209,14 @@ class Jsql {
             if (!!pass) {
                 let mappedRow = {};
                 fields.forEach(field => {
+                    let aliased = aliases.includes(field);
+                    let alias;
+                    if (aliased) {
+                        const tmp = field.split(' ');
+                        field = tmp[0];
+                        alias = tmp[2].trim();
+                    }
+
                     let split = field.split('.');
                     if (row[split[0]] !== undefined) {
                         // gonna be included
@@ -156,6 +229,7 @@ class Jsql {
                                 key = split[i];
                             }
                         }
+                        if (aliased) key = alias;
                         mappedRow[key] = val;
                     }
                 });

@@ -30,3 +30,4 @@ b) allow me to expand this to have joins later
 * Aggregate functions (avg, count, etc)
 * Dates
 * Aliasing (i.e. AS)
+* JOINs
