@@ -8,7 +8,7 @@ class Jsql {
         // Get fields we are selecting
         let selectIdx = query.toUpperCase().indexOf('SELECT');
         if (selectIdx < 0) throw new Error('invalid SQL syntax. No SELECT found');
-        let fieldsRgx = /(\s([\w*]+[,\s]+)+)(?=FROM)/gi;
+        let fieldsRgx = /(\s([\w\.*]+[,\s]+)+)(?=FROM)/gi;
         const fields = query.match(fieldsRgx)[0].split(',').map(f => f.trim());
         if (fields.includes('*')) fields.push(...Object.keys(data[table][0]));
 
@@ -101,11 +101,12 @@ class Jsql {
                 // Handles any nested objects
                 let keys = f.field.split('.');
                 let datum = row[keys[0]];
-                if (keys.length > 0) {
+                if (keys.length > 1) {
                     for (let i = 1; i < keys.length; i++) {
                         datum = datum[keys[i]];
                     }
                 }
+                if (datum === undefined) return acc;
                 datum = isNaN(+datum) ? datum.toLowerCase() : +datum;
 
                 switch (f.comparison.toLowerCase()) {
@@ -142,9 +143,20 @@ class Jsql {
             });
             if (!!pass) {
                 let mappedRow = {};
-                Object.keys(row).forEach(key => {
-                    if (fields.includes(key)) {
-                        mappedRow[key] = row[key];
+                fields.forEach(field => {
+                    let split = field.split('.');
+                    if (row[split[0]] !== undefined) {
+                        // gonna be included
+                        let val = row[split[0]];
+                        let key = split[0];
+                        if (split.length > 1) {
+                            // nested
+                            for (let i = 1; i < split.length; i++) {
+                                val = val[split[i]];
+                                key = split[i];
+                            }
+                        }
+                        mappedRow[key] = val;
                     }
                 });
                 acc.push(mappedRow);

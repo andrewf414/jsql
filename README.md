@@ -29,3 +29,4 @@ b) allow me to expand this to have joins later
 * HAVING
 * Aggregate functions (avg, count, etc)
 * Dates
+* Aliasing (i.e. AS)

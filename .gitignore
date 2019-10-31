@@ -2,3 +2,4 @@
 node_modules/
 test-data.json
 test.js
+*jasmine_examples*
