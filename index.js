@@ -9,7 +9,7 @@ class Jsql {
         const conditions = this.getConditions(query);
         const order = this.getOrder(query, fields);
         const filters = this.getFilters(conditions);
-        
+
         // Do the filtering and return result
         return this.sort(this.filterAndMapData(data[table], fields, filters, aliases), order.field, order.direction === 'ASC');
     }
@@ -47,7 +47,7 @@ class Jsql {
     static getFields(query, data, table) {
         let selectIdx = query.toUpperCase().indexOf('SELECT');
         if (selectIdx < 0) throw new Error('invalid SQL syntax. No SELECT found');
-        
+
         let fieldsRgx = /(\s([\w\.*]+[,\s]+)+)(?=FROM)/gi;
         const fieldsMatch = query.match(fieldsRgx);
         if (fieldsMatch === null) return null;
@@ -67,7 +67,7 @@ class Jsql {
         const tableMatch = query.match(re);
         return tableMatch === null ? null : tableMatch[0].trim().split(/\s/)[1];
     }
-    
+
     /**
      * Returns order specified, or default of first field listed ASC
      * Format of return is {field: 'name', direction: 'ASC|DESC'}
@@ -109,8 +109,8 @@ class Jsql {
     }
 
 
-    
-    
+
+
     /**
      * Takes in a condition string and returns the elements
      * e.g. a = b returns {field: a, value1: b, condition: '='}
@@ -123,34 +123,133 @@ class Jsql {
 
         if (elements[1].toLowerCase() === 'between') {
             // need to get two values
-            return { 
-                field: elements[0], 
-                comparison: elements[1], 
-                value1: !isNaN(+elements[2]) ? elements[2] : +elements[2], 
-                value2: !isNaN(+elements[4]) ? elements[4] : +elements[4] 
+            return {
+                field: elements[0],
+                comparison: elements[1],
+                value1: !isNaN(+elements[2]) ? elements[2] : +elements[2],
+                value2: !isNaN(+elements[4]) ? elements[4] : +elements[4]
             };
         }
         if (elements[1].toLowerCase() === 'in') {
             // get the list
-            return { 
-                field: elements[0], 
-                comparison: elements[1], 
+            return {
+                field: elements[0],
+                comparison: elements[1],
                 value1: conditionString.match(/\([\d\w,\s]+\)/)[0].toLowerCase()
             };
         }
         if (elements[1].toLowerCase() === 'like') {
             // get the expression
-            return { 
-                field: elements[0], 
-                comparison: elements[1], 
+            return {
+                field: elements[0],
+                comparison: elements[1],
                 value1: elements[2].replace(/["']/g, '').toLowerCase()
             };
         }
-        return { 
-            field: elements[0], 
-            comparison: elements[1], 
-            value1: isNaN(+elements[2]) ? elements[2].toLowerCase() : +elements[2] 
+        return {
+            field: elements[0],
+            comparison: elements[1],
+            value1: isNaN(+elements[2]) ? elements[2].toLowerCase() : +elements[2]
         };
+    }
+
+
+    /**
+     * Filter the data for any conditions and return the filtered data
+     * @param {*} data 
+     * @param {*} filters 
+     */
+    static filterData(data, filters) {
+        return data.filter(row => {
+            let pass = 1;
+            let n = filters.length;
+            for (let i = 0; i < n; i++) {
+                // Handles any nested objects
+                let keys = filters[i].field.split('.');
+                let datum = row[keys[0]];
+                if (keys.length > 1) {
+                    for (let i = 1; i < keys.length; i++) {
+                        datum = datum[keys[i]];
+                    }
+                }
+                if (datum === undefined) continue;
+                datum = isNaN(+datum) ? datum.toLowerCase() : +datum;
+
+                switch (filters[i].comparison.toLowerCase()) {
+                    case '=':
+                        pass *= +(datum === filters[i].value1);
+                        break;
+                    case '<>':
+                        pass *= +(datum !== filters[i].value1);
+                        break;
+                    case '>':
+                        pass *= +(datum > filters[i].value1);
+                        break;
+                    case '<':
+                        pass *= +(datum < filters[i].value1);
+                        break;
+                    case '<=':
+                        pass *= +(datum <= filters[i].value1);
+                        break;
+                    case '>=':
+                        pass *= +(datum >= filters[i].value1);
+                        break;
+                    case 'like':
+                        let term = filters[i].value1.replace(/%/g, '.*');
+                        let re = new RegExp(`${filters[i].value1.charAt(0) === '%' ? '' : '^'}${term}${filters[i].value1.charAt(filters[i].value1.length - 1) === '%' ? '' : '$'}`, 'i')
+                        pass *= +(datum.match(re) !== null);
+                        break;
+                    case 'in':
+                        pass *= +(filters[i].value1.replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(datum));
+                        break;
+                    case 'between':
+                        pass *= +(datum >= filters[i].value1 && row[filters[i].field] <= filters[i].value2);
+                        break;
+                }
+
+                if (!!!pass) break;
+            }
+
+            return !!pass;
+        });
+    }
+
+    /**
+     * Return array of data mapped to selected fields and aliases
+     * @param {*} data 
+     * @param {*} fields 
+     * @param {*} aliases 
+     */
+    static mapData(data, fields, aliases) {
+        return data.map(row => {
+            let mappedRow = {};
+            fields.forEach(field => {
+                let aliased = aliases.includes(field);
+                let alias;
+                if (aliased) {
+                    const tmp = field.split(' ');
+                    field = tmp[0];
+                    alias = tmp[2].trim();
+                }
+
+                let split = field.split('.');
+                if (row[split[0]] !== undefined) {
+                    // gonna be included
+                    let val = row[split[0]];
+                    let key = split[0];
+                    if (split.length > 1) {
+                        // nested
+                        for (let i = 1; i < split.length; i++) {
+                            val = val[split[i]];
+                            key = split[i];
+                        }
+                    }
+                    if (aliased) key = alias;
+                    mappedRow[key] = val;
+                }
+            });
+            return mappedRow;
+        });
     }
 
     /**
@@ -160,83 +259,7 @@ class Jsql {
      * @param {*} filters 
      */
     static filterAndMapData(data, fields, filters, aliases) {
-        return data.reduce((acc, row) => {
-            let pass = 1;
-            filters.forEach(f => {
-                // Handles any nested objects
-                let keys = f.field.split('.');
-                let datum = row[keys[0]];
-                if (keys.length > 1) {
-                    for (let i = 1; i < keys.length; i++) {
-                        datum = datum[keys[i]];
-                    }
-                }
-                if (datum === undefined) return acc;
-                datum = isNaN(+datum) ? datum.toLowerCase() : +datum;
-
-                switch (f.comparison.toLowerCase()) {
-                    case '=':
-                        pass *= +(datum === f.value1);
-                        break;
-                    case '<>':
-                        pass *= +(datum !== f.value1);
-                        break;
-                    case '>':
-                        pass *= +(datum > f.value1);
-                        break;
-                    case '<':
-                        pass *= +(datum < f.value1);
-                        break;
-                    case '<=':
-                        pass *= +(datum <= f.value1);
-                        break;
-                    case '>=':
-                        pass *= +(datum >= f.value1);
-                        break;
-                    case 'like':
-                        let term = f.value1.replace(/%/g, '.*');
-                        let re = new RegExp(`${f.value1.charAt(0) === '%' ? '' : '^'}${term}${f.value1.charAt(f.value1.length - 1) === '%' ? '' : '$'}`, 'i')
-                        pass *= +(datum.match(re) !== null);
-                        break;
-                    case 'in':
-                        pass *= +(f.value1.replace(/[\(\)]/g, '').split(/\s*,\s*/).includes(datum));
-                        break;
-                    case 'between':
-                        pass *= +(datum >= f.value1 && row[f.field] <= f.value2);
-                        break;
-                }
-            });
-            if (!!pass) {
-                let mappedRow = {};
-                fields.forEach(field => {
-                    let aliased = aliases.includes(field);
-                    let alias;
-                    if (aliased) {
-                        const tmp = field.split(' ');
-                        field = tmp[0];
-                        alias = tmp[2].trim();
-                    }
-
-                    let split = field.split('.');
-                    if (row[split[0]] !== undefined) {
-                        // gonna be included
-                        let val = row[split[0]];
-                        let key = split[0];
-                        if (split.length > 1) {
-                            // nested
-                            for (let i = 1; i < split.length; i++) {
-                                val = val[split[i]];
-                                key = split[i];
-                            }
-                        }
-                        if (aliased) key = alias;
-                        mappedRow[key] = val;
-                    }
-                });
-                acc.push(mappedRow);
-            }
-            return acc;
-        }, []);
+        return this.mapData(this.filterData(data, filters), fields, aliases);
     }
 
 
