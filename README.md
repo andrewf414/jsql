@@ -23,11 +23,13 @@ b) allow me to expand this to have joins later
 * FROM
 * WHERE (=, <=, >=, <, >, <>, like, in, between)
 * ORDER BY
+* Aliasing (i.e. select field AS othername)
+
+### Working on
+* Dates
 
 ### Yet to Implement
 * GROUP BY
 * HAVING
 * Aggregate functions (avg, count, etc)
-* Dates
-* Aliasing (i.e. AS)
 * JOINs

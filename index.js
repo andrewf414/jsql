@@ -35,7 +35,7 @@ class Jsql {
     static getConditions(query) {
         let re = /(\s*[\w\.]+\s*)((<=)|(>=)|(<>)|[<>=])(\s*[\w\d"']+)|(\s*[\w\.]+\s*)like(\s[\w"'%]+)|(\s*[\w\.]+\s*)between(\s[\w\d]+){3}|(\s*[\w\.]+\s*)in(\s\(.+\))/gi
         const conditionsMatch = query.match(re);
-        return conditionsMatch === null ? null : conditionsMatch.map(c => c.trim().replace(/'|"/g, ''));
+        return conditionsMatch === null ? null : conditionsMatch.map(c => c.trim());
     }
 
     /**
@@ -108,9 +108,6 @@ class Jsql {
         return filters;
     }
 
-
-
-
     /**
      * Takes in a condition string and returns the elements
      * e.g. a = b returns {field: a, value1: b, condition: '='}
@@ -120,14 +117,16 @@ class Jsql {
      */
     static mapCondition(conditionString) {
         let elements = conditionString.split(/\s+/);
+        let val1 = this.stringToVal(elements[2].trim());
+        let val2 = elements[4] === undefined ? null : this.stringToVal(elements[4].trim());
 
         if (elements[1].toLowerCase() === 'between') {
             // need to get two values
             return {
                 field: elements[0],
                 comparison: elements[1],
-                value1: !isNaN(+elements[2]) ? elements[2] : +elements[2],
-                value2: !isNaN(+elements[4]) ? elements[4] : +elements[4]
+                value1: val1,
+                value2: val2
             };
         }
         if (elements[1].toLowerCase() === 'in') {
@@ -135,7 +134,7 @@ class Jsql {
             return {
                 field: elements[0],
                 comparison: elements[1],
-                value1: conditionString.match(/\([\d\w,\s]+\)/)[0].toLowerCase()
+                value1: conditionString.match(/\([\d\w,\s]+\)/)[0].toLowerCase()    // TODO: review this for anything better
             };
         }
         if (elements[1].toLowerCase() === 'like') {
@@ -143,13 +142,13 @@ class Jsql {
             return {
                 field: elements[0],
                 comparison: elements[1],
-                value1: elements[2].replace(/["']/g, '').toLowerCase()
+                value1: val1.replace(/["']/g, '').toLowerCase()
             };
         }
         return {
             field: elements[0],
             comparison: elements[1],
-            value1: isNaN(+elements[2]) ? elements[2].toLowerCase() : +elements[2]
+            value1: isNaN(val1) ? val1.toLowerCase() : val1
         };
     }
 
@@ -287,6 +286,39 @@ class Jsql {
                 }
             });
         }
+    }
+
+
+
+    /**
+     * Takes in a string and attempts to parse it to a number, bool, or date if possible
+     * Returns successful conversion or the input
+     * @param {*} str 
+     */
+    static stringToVal(str) {
+        // number
+        if (!isNaN(+str)) return +str;
+
+        // boolean
+        if (str.toLowerCase() === 'true') return true;
+        if (str.toLowerCase() === 'false') return false;
+
+        // date
+        let re = /\d{8}/gi;
+        if (str.match(re)) {
+            let d = new Date(str);
+            if (Object.prototype.toString.call(d) === '[object Date]') {
+                if (isNaN(d.valueOf())) {
+                    // not date
+                    return str;
+                } else {
+                    // date valid
+                    return d;
+                }
+            }
+        }
+
+        return str
     }
 }
 
